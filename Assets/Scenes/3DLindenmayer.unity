@@ -219,8 +219,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _iteration: 0
   _maxLength: 2
-  _diameter: 0.55
-  _leafVariance: 2.48
+  _diameter: 0.514
+  _leafVariance: 2.38
   _angle: 32
   LeafProbability: 1
   _treeParentBranch:
@@ -236,9 +236,9 @@ MonoBehaviour:
   - {fileID: 851327088}
   - {fileID: 688377711}
   _treeBranch: {fileID: 26744738122076288, guid: 06c7dcb26520d5245b80b5f216ac927f, type: 3}
-  _treeLeaf: {fileID: 3660470660234365838, guid: b443e0350ff9b8c4097679cd76e9e4f2, type: 3}
+  _treeLeaf: {fileID: 8806981220320746378, guid: 7b5d8d631045a5c43b134362ba3d7aa5, type: 3}
   _initialState: F
-  _productionRule: F[-Fa][+&Fa]F[^F]a
+  _productionRule: F[-F][+&F]F[^F]F
   _treeRotations: {fileID: 333498560}
 --- !u!4 &333498559
 Transform:
@@ -350,10 +350,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   TreeItemIteration:
-  - {x: 0.5, y: 0.5, z: 0.5}
   - {x: 1, y: 1, z: 1}
   - {x: 1.5, y: 1.5, z: 1.5}
   - {x: 3, y: 3, z: 3}
+  - {x: 4, y: 4, z: 4}
   - {x: 5, y: 5, z: 5}
   _growthRate: 1
   IsGrowing: 0
@@ -375,7 +375,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab8fb8dfa3e2ac743817e26504faeae8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Self: {fileID: 681850104}
+  Self: {fileID: 255236429}
   _firstScale: {x: 1, y: 1, z: 1}
   TreeIterationParents:
   - {fileID: 255236429}
@@ -385,7 +385,7 @@ MonoBehaviour:
   - {fileID: 663664924}
   DetectEnemies: 0
   _detectionRange: 0
-  _time: 1
+  _time: 10
 --- !u!1 &688377711
 GameObject:
   m_ObjectHideFlags: 0
