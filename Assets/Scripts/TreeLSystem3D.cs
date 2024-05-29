@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using System;
-using Unity.VisualScripting;
+using System.Threading.Tasks;
+using System.Threading;
 
 //Andrei Quirante
 public class TransformInfo3D
@@ -16,15 +17,15 @@ public class TreeLSystem3D : MonoBehaviour
     [Range(0, 5)] public int _iteration = 0;
 
     [Header("Tree Values")]
-    [SerializeField] [Range(0, 2)] private float _maxLength;
-    [SerializeField] [Range(0, 1)] private float _diameter;
-    [SerializeField] [Range(0, 5)] private float _leafVariance;
+    [SerializeField][Range(0, 2)] private float _maxLength;
+    [SerializeField][Range(0, 1)] private float _diameter;
+    [SerializeField][Range(0, 5)] private float _leafVariance;
     [SerializeField] private float _angle;
     public float LeafProbability = 0.5f;
 
     [Header("Tree Parents")]
-    [SerializeField] private GameObject[] _treeParentBranch;
-    [SerializeField] private GameObject[] _treeParentLeaf;
+    [SerializeField] private GameObject _treeParentBranch;
+    [SerializeField] private GameObject _treeParentLeaf;
 
     [Header("Tree Parts")]
     public GameObject _treeBranch;
@@ -37,6 +38,8 @@ public class TreeLSystem3D : MonoBehaviour
     [Space(10f)]
     public TreeRotations _treeRotations;
     private const string _axiom = "X";
+    private int poolBranchSize = 500;
+    private int poolLeafSize = 100;
 
     private Dictionary<char, string> _rules;
     private Stack<TransformInfo3D> _transformStack;
@@ -58,7 +61,7 @@ public class TreeLSystem3D : MonoBehaviour
             _treeBranchColor.sharedMaterial.enableInstancing = true;
         }
         if (_treeLeafColor != null && _treeLeafColor.sharedMaterial != null)
-        { 
+        {
             _treeLeafColor.sharedMaterial.enableInstancing = true;
         }
 
@@ -67,23 +70,92 @@ public class TreeLSystem3D : MonoBehaviour
             {'X', _initialState },
             {'F', _productionRule }
         };
-        Generate(_iteration);
+
+        InitializeObjectPool(poolBranchSize, poolLeafSize);
+        Task.Run(() => Generate(_iteration));
+    }
+
+    private StringBuilder _stringBuilder = new StringBuilder();
+    private Queue<GameObject> branchPool = new Queue<GameObject>();
+    private Queue<GameObject> leafPool = new Queue<GameObject>();
+
+    void InitializeObjectPool(int branchSize, int leafSize)
+    {
+        // Populate branch and leaf object pools
+        for (int i = 0; i < branchSize; i++)
+        {
+            GameObject branch = Instantiate(_treeBranch, Vector3.zero, Quaternion.identity);
+            branch.SetActive(false);
+            branchPool.Enqueue(branch);
+
+        }
+        for (int j = 0; j < leafSize; j++)
+        {
+            GameObject leaf = Instantiate(_treeLeaf, Vector3.zero, Quaternion.identity);
+            leaf.SetActive(false);
+            leafPool.Enqueue(leaf);
+        }
+    }
+
+    GameObject GetBranchFromPool()
+    {
+        if (branchPool.Count == 0)
+        {
+            GameObject branch = Instantiate(_treeBranch, Vector3.zero, Quaternion.identity) as GameObject;
+            branch.SetActive(false);
+            branch.transform.parent = _treeParentBranch.transform;
+            return branch;
+        }
+
+        GameObject pooledBranch = branchPool.Dequeue();
+        pooledBranch.SetActive(true);
+        pooledBranch.transform.parent = _treeParentBranch.transform;
+        return pooledBranch;
+    }
+
+    void ReturnBranchToPool(GameObject branch)
+    {
+        branch.SetActive(false);
+        branchPool.Enqueue(branch);
+    }
+
+    GameObject GetLeafFromPool()
+    {
+        if (leafPool.Count == 0)
+        {
+            GameObject leaf = Instantiate(_treeLeaf, Vector3.zero, Quaternion.identity) as GameObject;
+            leaf.transform.parent = _treeLeaf.transform;
+            leaf.SetActive(false);
+            return leaf;
+        }
+
+        GameObject pooledLeaf = leafPool.Dequeue();
+        pooledLeaf.SetActive(true);
+        pooledLeaf.transform.parent = _treeParentLeaf.transform;
+        return pooledLeaf;
+    }
+
+    void ReturnLeafToPool(GameObject leaf)
+    {
+        leaf.SetActive(false);
+        leafPool.Enqueue(leaf);
     }
 
     public void Generate(int _updateIteration)
     {
         _currentString = _axiom;
 
-        StringBuilder sb = new StringBuilder();
-
         for (int i = 0; i < _updateIteration; i++)
         {
-            foreach (char c in _currentString)
+            _stringBuilder.Clear();
+
+            Parallel.For(0, _currentString.Length, j =>
             {
-                sb.Append(_rules.ContainsKey(c) ? _rules[c] : c.ToString());
-            }
-            _currentString = sb.ToString();
-            sb = new StringBuilder();
+                char c = _currentString[j];
+                _stringBuilder.Append(_rules.ContainsKey(c) ? _rules[c] : c.ToString());
+            });
+
+            _currentString = _stringBuilder.ToString();
         }
 
         for (int i = 0; i < _currentString.Length; i++)
@@ -125,9 +197,16 @@ public class TreeLSystem3D : MonoBehaviour
                     });
                     break;
                 case ']':       // Pop the current state
-                    TransformInfo3D ti = _transformStack.Pop();
-                    transform.position = ti.Position3D;
-                    transform.rotation = ti.Rotation3D;
+                    if (_transformStack.Count > 0)
+                    {
+                        TransformInfo3D ti = _transformStack.Pop();
+                        transform.position = ti.Position3D;
+                        transform.rotation = ti.Rotation3D;
+                    }
+                    else
+                    {
+                        Debug.LogWarning("Trying to pop from an empty stack.");
+                    }
                     break;
                 default:
                     throw new InvalidOperationException("Invalid L-system operaion");
@@ -138,7 +217,7 @@ public class TreeLSystem3D : MonoBehaviour
     GameObject _branch;
     void CreateBranch() //Create the tree branch
     {
-        _branch = Instantiate(_treeBranch, transform.position, transform.rotation);                           //Instantiate the branch at (0,0,0)
+        _branch = GetBranchFromPool();                           //Instantiate the branch at (0,0,0)
         _initialRotation = Quaternion.identity;                                                               //Gets the initial Rotation of the Branch
 
         _branch.transform.localScale = new Vector3(_diameter, _maxLength, _diameter);
@@ -147,74 +226,30 @@ public class TreeLSystem3D : MonoBehaviour
 
         transform.Translate(Vector3.up * _maxLength);
 
-        switch (_iteration)
-        {
-            case 0:
-                _branch.transform.parent = _treeParentBranch[0].transform;
-                break;
-            case 1:
-                _branch.transform.parent = _treeParentBranch[1].transform;
-                break;
-            case 2:
-                _branch.transform.parent = _treeParentBranch[2].transform;
-                break;
-            case 3:
-                _branch.transform.parent = _treeParentBranch[3].transform;
-                break;
-            case 4:
-                _branch.transform.parent = _treeParentBranch[4].transform;
-                break;
-            case 5:
-                _branch.transform.parent = _treeParentBranch[5].transform;
-                break;
-            default:
-                return;
-        }
-
-        _maxLength -= UnityEngine.Random.Range(0, 0.5f);
+        _maxLength -= GetRandomFloat(0, 0.5f); // Optimize random number generation for _maxLength
         _diameter -= 0.01f;
-        if(_maxLength <= 0)
+
+        if (_maxLength <= 0)
         {
             _maxLength = 2;
         }
-        if(_diameter <= 0.1f)
+        if (_diameter <= 0.1f)
         {
             _diameter = 0.5f;
         }
     }
     void Leaf()
     {
-        float _randomValue = UnityEngine.Random.value;
-        float _rand = UnityEngine.Random.Range(1, _leafVariance);
+        float randomValue = GetRandomFloat(0, 1); // Optimize random number generation for randomValue
+        float rand = GetRandomFloat(1, _leafVariance);
 
-        float _randomRange = UnityEngine.Random.Range(-90, 90);
-        if(_randomValue < LeafProbability)
+        float randomRange = GetRandomFloat(-90, 90);
+        if (randomValue < LeafProbability)
         {
-            GameObject _leaf = Instantiate(_treeLeaf, transform.position, Quaternion.Euler(_randomRange, _randomRange, _randomRange));
-            _leaf.transform.localScale = new Vector3(_rand, _rand, _rand);
-            switch(_iteration)
-            {
-                case 0:
-                    _leaf.transform.parent = _treeParentLeaf[0].transform;
-                    break;
-                case 1:
-                    _leaf.transform.parent = _treeParentLeaf[1].transform;
-                    break;
-                case 2:
-                    _leaf.transform.parent = _treeParentLeaf[2].transform;
-                    break;
-                case 3:
-                    _leaf.transform.parent = _treeParentLeaf[3].transform;
-                    break;
-                case 4:
-                    _leaf.transform.parent = _treeParentLeaf[4].transform;
-                    break;
-                case 5:
-                    _leaf.transform.parent = _treeParentLeaf[5].transform;
-                    break;
-                default:
-                    return;
-            }
+            GameObject _leaf = GetLeafFromPool();
+            _leaf.transform.position = transform.position;
+            _leaf.transform.rotation = Quaternion.Euler(randomRange, randomRange, randomRange);
+            _leaf.transform.localScale = new Vector3(rand, rand, rand);
         }
     }
 
@@ -237,7 +272,7 @@ public class TreeLSystem3D : MonoBehaviour
     void PitchUp()                      // ^
     {
         Quaternion _currentRotation = transform.rotation;
-        Matrix4x4 _pitchUp =  Matrix4x4.TRS(Vector3.zero, _currentRotation, Vector3.one) * _treeRotations.RotationPitch(_angle);
+        Matrix4x4 _pitchUp = Matrix4x4.TRS(Vector3.zero, _currentRotation, Vector3.one) * _treeRotations.RotationPitch(_angle);
         Quaternion _rotation = Quaternion.LookRotation(_pitchUp.GetColumn(0), _pitchUp.GetColumn(1));
 
         transform.rotation = _rotation;
@@ -261,10 +296,17 @@ public class TreeLSystem3D : MonoBehaviour
     void RollRight()                    // /
     {
         Quaternion _currentRotation = transform.rotation;
-        Matrix4x4 _rollRight = Matrix4x4.TRS(Vector3.zero, _currentRotation, Vector3.one)* _treeRotations.RotationHeading(-_angle);
+        Matrix4x4 _rollRight = Matrix4x4.TRS(Vector3.zero, _currentRotation, Vector3.one) * _treeRotations.RotationHeading(-_angle);
         Quaternion _rotation = Quaternion.LookRotation(_rollRight.GetColumn(2), _rollRight.GetColumn(1));
 
         transform.rotation = _rotation;
+    }
+
+    private System.Random random = new System.Random(); // Initialize random number generator
+
+    float GetRandomFloat(float min, float max)
+    {
+        return (float)(random.NextDouble() * (max - min) + min);
     }
 
 }

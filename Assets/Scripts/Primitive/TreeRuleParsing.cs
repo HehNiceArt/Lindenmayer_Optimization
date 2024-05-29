@@ -16,7 +16,7 @@ public class TreeRuleParsing : MonoBehaviour
     [SerializeField] private float _width = 1f;
     [SerializeField] private float _length = 2f;
     [SerializeField] private float _angle = 30f;
-    [SerializeField] private float _roll = 30f; // (\ roll left) (/ roll right)
+    // [SerializeField] private float _roll = 30f; // (\ roll left) (/ roll right)
 
     [Header("Tree Parts")]
     [SerializeField] private GameObject _branch;
